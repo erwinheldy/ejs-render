@@ -18,8 +18,8 @@ class compiler {
   async run() {
     if (this.watch) {
       chokidar.watch(this.input, { ignoreInitial: true })
-        .on('add', async target => this.renderTarget(target))
-        .on('change', async target => this.renderTarget(target))
+        .on('add', async target => await this.renderTarget(target))
+        .on('change', async target => await this.renderTarget(target))
         .on('unlink', async () => await this.renderAll())
         .on('ready', () => log('Waiting for file changes...'))
     }
@@ -44,7 +44,11 @@ class compiler {
   }
 
   getData() {
-    return fs.readJsonSync(this.data)
+    try {
+      return JSON.parse(fs.readFileSync(this.data, 'utf-8'))
+    } catch (error) {
+      return this.getData() // sometimes the data is empty, so we have to get it again
+    }
   }
 
   async render(file) {
