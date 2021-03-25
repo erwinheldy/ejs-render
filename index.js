@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 const fs = require('fs-extra')
 const ejs = require('ejs')
 const log = console.log.bind(console)
