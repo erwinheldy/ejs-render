@@ -43,17 +43,23 @@ class compiler {
     return files
   }
 
-  getData() {
-    try {
-      return JSON.parse(fs.readFileSync(this.data, 'utf-8'))
-    } catch (error) {
-      return this.getData() // sometimes the data is empty, so we have to get it again
+  async getCompiled(file, data) {
+    let html = await ejs.renderFile(file, data)
+    if (html.trim() == '') { // sometimes the result is empty, so we have to compile again
+      html = await this.getCompiled(file, data)
     }
+    return html
   }
 
   async render(file) {
-    const html = await ejs.renderFile(path.join(this.input, file), this.getData())
-    fs.outputFileSync(path.join(this.output, file.replace('.ejs', '.html')), html)
+    const filePath = path.join(this.input, file)
+    if (fs.readFileSync(filePath, 'utf-8').trim() != '') {
+      fs.readJSON(this.data, async (err, data) => {
+        if (err) log(err)
+        const html = await this.getCompiled(filePath, data)
+        fs.outputFileSync(path.join(this.output, file.replace('.ejs', '.html')), html)
+      })
+    }
   }
 
   async renderAll() {
