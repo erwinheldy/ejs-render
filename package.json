@@ -1,11 +1,10 @@
 {
   "name": "ejs-render",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "license": "MIT",
   "bin": "index.js",
   "dependencies": {
-    "chokidar": "3.5.1",
-    "ejs": "3.1.6",
-    "fs-extra": "9.1.0"
+    "chokidar": "^3.5.1",
+    "ejs": "^3.1.6"
   }
 }

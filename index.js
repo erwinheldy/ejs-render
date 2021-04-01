@@ -1,27 +1,40 @@
 #!/usr/bin/env node
 
-const fs = require('fs-extra')
-const ejs = require('ejs')
 const log = console.log.bind(console)
-const path = require('path')
+const ejs = require('ejs')
 const chokidar = require('chokidar')
+const { basename, join } = require('path')
+const { mkdirSync, writeFileSync, readdirSync, unlinkSync, readFileSync } = require('fs')
 
 class compiler {
 
   constructor() {
-    this.input = this.argv('input')
-    this.data = this.argv('data')
+    this.input  = this.argv('input')
+    this.data   = this.argv('data')
     this.output = this.argv('output')
-    this.watch = this.argv('watch')
+    this.watch  = this.argv('watch')
+    this.delay  = this.argv('delay') || 200
+    mkdirSync(this.output, { recursive: true })
   }
 
   async run() {
     if (this.watch) {
-      chokidar.watch(this.input, { ignoreInitial: true })
-        .on('add', async target => await this.renderTarget(target))
-        .on('change', async target => await this.renderTarget(target))
-        .on('unlink', async () => await this.renderAll())
-        .on('ready', () => log('Waiting for file changes...'))
+      chokidar.watch(this.input, { ignoreInitial: true }).on('all', async (event, target) => {
+        setTimeout(async () => {
+          if ((event === 'add' || event === 'change') && target !== this.data) {
+            const start = new Date()
+            log('\nProcessing...')
+
+            const filename = basename(target)
+            filename.startsWith('_') ? await this.renderPartial(filename) : await this.render(filename)
+
+            log('Finished in', new Date().getTime() - start.getTime(), 'ms')
+          }
+          else {
+            await this.renderAll()
+          }
+        }, this.delay)
+      }).on('ready', () => log('Waiting for file changes...'))
     }
     else {
       await this.renderAll()
@@ -34,72 +47,35 @@ class compiler {
   }
 
   getFiles() {
-    let files = []
-    fs.readdirSync(this.input).map(file => {
-      if (file.endsWith('.ejs') && !file.startsWith('_')) { // ignore partial
-        files.push(file)
-      }
-    })
-    return files
-  }
-
-  async getCompiled(file, data) {
-    let html = await ejs.renderFile(file, data)
-    if (html.trim() == '') { // sometimes the result is empty, so we have to compile again
-      html = await this.getCompiled(file, data)
-    }
-    return html
+    return readdirSync(this.input).filter(file => file.endsWith('.ejs') && !file.startsWith('_'))
   }
 
   async render(file) {
-    const filePath = path.join(this.input, file)
-    if (fs.readFileSync(filePath, 'utf-8').trim() != '') {
-      fs.readJSON(this.data, async (err, data) => {
-        if (err) log(err)
-        const html = await this.getCompiled(filePath, data)
-        fs.outputFileSync(path.join(this.output, file.replace('.ejs', '.html')), html)
-      })
-    }
+    const html = await ejs.renderFile(
+      join(this.input, file),
+      JSON.parse(readFileSync(this.data, 'utf-8'))
+    )
+    return writeFileSync(join(this.output, basename(file, '.ejs') + '.html'), html)
   }
 
   async renderAll() {
     const start = new Date()
-    log('\nProcessing html...')
+    log('\nProcessing...')
 
-    fs.emptyDirSync(this.output)
+    readdirSync(this.output).map(file => unlinkSync(join(this.output, file)))
     await Promise.all(this.getFiles().map(file => this.render(file)))
 
     log('Finished in', new Date().getTime() - start.getTime(), 'ms')
   }
 
   async renderPartial(target) {
-    const partial = target.replace('.ejs', '')
+    const partial = basename(target, '.ejs')
     this.getFiles().forEach(async file => {
-      const content = (await fs.readFile(path.join(this.input, file))).toString()
+      const content = readFileSync(join(this.input, file), 'utf-8')
       if (content.includes(partial + "'") || content.includes(partial + '"')) {
         await this.render(file)
       }
     })
-  }
-
-  async renderTarget(target) {
-    if (target === this.data) {
-      await this.renderAll()
-    }
-    else {
-      log('\nProcessing html...')
-
-      const file = path.basename(target)
-      const start = new Date()
-
-      if (file.startsWith('_')) {
-        await this.renderPartial(file)
-      }
-      else {
-        await this.render(file)
-      }
-      log('Finished in', new Date().getTime() - start.getTime(), 'ms')
-    }
   }
 
 }

@@ -18,3 +18,4 @@ Simple ejs template compiler with --watch support
 - `--data=[file.json]`  Data file
 - `--output=[dir]`      Output directory
 - `--watch`             Enable watch
+- `--delay`             The millisecond delay between a file change and task execution. Default: `200`
